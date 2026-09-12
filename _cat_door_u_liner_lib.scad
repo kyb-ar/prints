@@ -1,16 +1,23 @@
 // Cat door U-shaped liner - shared geometry.
 // Fits into a rectangular box cut into a door, lining the bottom and
 // two sides with a thin wall so a smaller insert seats snugly in the gap.
-// Top of the U is left open.
 //
 // Flanges at the front and/or back cap the ends, sitting flush against
 // the door's face and overlapping the cut edge to hide it.
 //
-// The full part (10.5in wide) is too wide for a 256mm printer bed, so it's
-// split down the middle of the bottom rail into two L-shaped halves - see
-// cat_door_u_liner_left.scad / cat_door_u_liner_right.scad, which include
-// this file and call render_liner(). This file has no directly renderable
-// geometry of its own (build_stl.py skips files starting with "_").
+// PRINTABILITY: a single piece with a 90-degree bend (leg+rail) can't be
+// oriented to avoid supports, because the leg's flange overhang needs
+// rotation about one axis while the rail's needs rotation about the other.
+// So the part is split into 3 straight pieces - left leg, right leg, and
+// the full-width bottom rail - each printable with zero overhangs, joined
+// with a peg-and-hole press fit at the two corners. The rail (10.5in =
+// 266.7mm) is also individually longer than a 256mm bed, so it's printed
+// at a 45-degree diagonal, which brings its footprint to ~219x219mm.
+//
+// See cat_door_u_liner_leg_left.scad / _leg_right.scad / _rail.scad, which
+// include this file and call the render_*() entry points. This file has no
+// directly renderable geometry of its own (build_stl.py skips files
+// starting with "_").
 
 // ---- Parameters (inches) ----
 door_depth      = 1.5;   // door thickness (liner spans this, Z)
@@ -31,26 +38,22 @@ countersink       = true; // recess for a flat/flush screw head, on the inner fa
 countersink_dia   = 0.36; // head diameter (~#8 flat-head screw)
 countersink_depth = 0.1;  // how deep the taper cuts into the leg (< wall)
 
-split_x = box_width / 2; // where to cut the bottom rail into two halves
-                          // (centered; well clear of the screw holes near
-                          // each leg, so the cut doesn't hit any hardware)
+// Corner joint: a round peg on each leg presses into a hole in the rail.
+// The peg runs along the leg's own length, so it's a horizontal, in-plane
+// extension of the print (no added overhang) rather than a feature that
+// has to stick straight up off the bed. hole is slightly smaller than the
+// peg for a firm friction/snap fit - sand the peg or reprint with
+// adjusted diameters if it's too tight/loose.
+joint_peg_dia   = 0.16;
+joint_hole_dia  = 0.15;
+joint_peg_height = 0.25;
+joint_hole_depth = 0.32;
 
-eps = 0.01; // small overlap so flange and liner fuse into one solid
-big = 1000; // far outside the model, used to build clipping half-spaces
+rail_print_angle = 45; // diagonal rotation so the rail fits a 256mm bed
 
-// ---- Model ----
-// U shape: two side rectangles + one bottom rectangle, open at the top.
-// w/h are the outer footprint, wall_thick the leg width, spanning z0..z1,
-// shifted by (x_off, y_off) so a flange can grow outward from the liner.
-module u_shape(w, h, wall_thick, z0, z1, x_off = 0, y_off = 0) {
-    zt = z1 - z0;
-    translate([x_off, y_off, z0]) {
-        cube([wall_thick, h, zt]);                       // left side
-        translate([w - wall_thick, 0, 0])
-            cube([wall_thick, h, zt]);                    // right side
-        cube([w, wall_thick, zt]);                        // bottom
-    }
-}
+eps = 0.01; // small overlap so parts fuse into one solid in unions
+
+// ---- Shared sub-features ----
 
 // Horizontal screw hole through one leg only (not the flange), so a screw
 // bites into the solid door beside the cutout. Bored outward through the
@@ -75,61 +78,91 @@ module countersink_leg(x_face, y_pos, dir) {
             cylinder(h = countersink_depth, d1 = d1, d2 = d2, $fn = 32);
 }
 
-module cat_door_liner() {
-    difference() {
-        union() {
-            // Main liner, filling the through-hole depth
-            u_shape(box_width, box_height, wall, 0, door_depth);
+// ---- Leg (a straight bar; the rail owns the corner squares, so a leg's
+// own Y range starts at "wall", not 0) ----
+// Built for the left side; the right leg is this shape mirrored about the
+// box's centerline, which correctly flips the screw hole/countersink too.
+module leg_shape(dir) {
+    if (dir > 0) {
+        translate([box_width, 0, 0]) mirror([1, 0, 0]) leg_shape(-1);
+    } else {
+        y0 = wall;
+        y1 = box_height;
+        h = y1 - y0;
+        difference() {
+            union() {
+                translate([0, y0, 0]) cube([wall, h, door_depth]);
+                if (flange_front)
+                    translate([-flange_overlap, y0, -flange_thick])
+                        cube([wall + flange_overlap, h, flange_thick + eps]);
+                if (flange_back)
+                    translate([-flange_overlap, y0, door_depth - eps])
+                        cube([wall + flange_overlap, h, flange_thick + eps]);
 
-            // Front flange: sits in front of the door face (z < 0), wider
-            // than the hole so it overlaps and hides the cut on 3 sides
-            if (flange_front)
-                u_shape(box_width + 2 * flange_overlap, box_height + flange_overlap,
-                        wall + flange_overlap, -flange_thick, eps,
-                        -flange_overlap, -flange_overlap);
+                // Peg extending off the bottom face, into the rail's mortise
+                translate([wall / 2, y0 - joint_peg_height, door_depth / 2])
+                    rotate([-90, 0, 0])
+                        cylinder(h = joint_peg_height + eps, d = joint_peg_dia, $fn = 32);
+            }
 
-            // Back flange: mirrors the front, behind the door face
-            if (flange_back)
-                u_shape(box_width + 2 * flange_overlap, box_height + flange_overlap,
-                        wall + flange_overlap, door_depth - eps, door_depth + flange_thick,
-                        -flange_overlap, -flange_overlap);
-        }
-
-        if (screw_holes) {
-            y_pos = box_height - screw_hole_inset;
-            screw_hole_leg(0, y_pos);                 // left leg, out through x=0
-            screw_hole_leg(box_width - wall, y_pos);  // right leg, out through x=box_width
-
-            if (countersink) {
-                countersink_leg(wall, y_pos, -1);            // left leg, inner face
-                countersink_leg(box_width - wall, y_pos, 1); // right leg, inner face
+            if (screw_holes) {
+                y_pos = box_height - screw_hole_inset;
+                screw_hole_leg(0, y_pos);
+                if (countersink) countersink_leg(wall, y_pos, -1);
             }
         }
     }
 }
 
-// Keeps only the x <= split_x (or x >= split_x) portion of the liner, for
-// printing as two separate pieces that join at the middle of the bottom rail.
-module cat_door_liner_part(part) {
-    if (part == "left")
-        intersection() {
-            cat_door_liner();
-            translate([-big, -big, -big]) cube([big + split_x, 2 * big, 2 * big]);
-        }
-    else if (part == "right")
-        intersection() {
-            cat_door_liner();
-            translate([split_x, -big, -big]) cube([big + (box_width - split_x), 2 * big, 2 * big]);
-        }
-    else
-        cat_door_liner();
+// ---- Rail (full width; owns both bottom corner squares plus a mortise
+// hole at each end that receives the matching leg's peg) ----
+module rail_hole_at(x) {
+    translate([x, wall - joint_hole_depth, door_depth / 2])
+        rotate([-90, 0, 0])
+            cylinder(h = joint_hole_depth + eps, d = joint_hole_dia, $fn = 32);
 }
 
-// All dimensions above are in inches; STL files carry no unit, and slicers
-// (Elegoo/Cura/PrusaSlicer/etc.) assume mm, so scale the output to mm here
-// to keep the real-world size correct on import.
-module render_liner(part = "whole") {
-    mm_per_inch = 25.4;
+module rail_shape() {
+    difference() {
+        union() {
+            cube([box_width, wall, door_depth]);
+            if (flange_front)
+                translate([-flange_overlap, -flange_overlap, -flange_thick])
+                    cube([box_width + 2 * flange_overlap, wall + flange_overlap, flange_thick + eps]);
+            if (flange_back)
+                translate([-flange_overlap, -flange_overlap, door_depth - eps])
+                    cube([box_width + 2 * flange_overlap, wall + flange_overlap, flange_thick + eps]);
+        }
+
+        rail_hole_at(wall / 2);
+        rail_hole_at(box_width - wall / 2);
+    }
+}
+
+// ---- Print-orientation wrappers ----
+// Each piece is rotated so its "spine" (the inner face shared with the box
+// opening) sits on the bed and the flange tips are at the top - going up,
+// the cross-section only ever shrinks, so nothing overhangs and no
+// supports are needed.
+mm_per_inch = 25.4;
+
+// The left and right legs are the same physical part: the flanges are
+// front/back symmetric and the screw hole/countersink are centered on that
+// same axis, so a 180-degree flip about the leg's own length swaps "left"
+// for "right". One file, printed twice - flip one copy end-for-end when
+// installing it on the other side of the door.
+module render_leg() {
     scale([mm_per_inch, mm_per_inch, mm_per_inch])
-        cat_door_liner_part(part);
+        translate([0, 0, wall])
+            rotate([0, 90, 0])
+                leg_shape(-1);
+}
+
+module render_rail() {
+    z_shift = wall;
+    scale([mm_per_inch, mm_per_inch, mm_per_inch])
+        rotate([0, 0, rail_print_angle])
+            translate([0, 0, z_shift])
+                rotate([-90, 0, 0])
+                    rail_shape();
 }
