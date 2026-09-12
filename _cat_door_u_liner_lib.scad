@@ -1,10 +1,16 @@
-// Cat door U-shaped liner
+// Cat door U-shaped liner - shared geometry.
 // Fits into a rectangular box cut into a door, lining the bottom and
 // two sides with a thin wall so a smaller insert seats snugly in the gap.
 // Top of the U is left open.
 //
 // Flanges at the front and/or back cap the ends, sitting flush against
 // the door's face and overlapping the cut edge to hide it.
+//
+// The full part (10.5in wide) is too wide for a 256mm printer bed, so it's
+// split down the middle of the bottom rail into two L-shaped halves - see
+// cat_door_u_liner_left.scad / cat_door_u_liner_right.scad, which include
+// this file and call render_liner(). This file has no directly renderable
+// geometry of its own (build_stl.py skips files starting with "_").
 
 // ---- Parameters (inches) ----
 door_depth      = 1.5;   // door thickness (liner spans this, Z)
@@ -25,7 +31,12 @@ countersink       = true; // recess for a flat/flush screw head, on the inner fa
 countersink_dia   = 0.36; // head diameter (~#8 flat-head screw)
 countersink_depth = 0.1;  // how deep the taper cuts into the leg (< wall)
 
+split_x = box_width / 2; // where to cut the bottom rail into two halves
+                          // (centered; well clear of the screw holes near
+                          // each leg, so the cut doesn't hit any hardware)
+
 eps = 0.01; // small overlap so flange and liner fuse into one solid
+big = 1000; // far outside the model, used to build clipping half-spaces
 
 // ---- Model ----
 // U shape: two side rectangles + one bottom rectangle, open at the top.
@@ -97,4 +108,28 @@ module cat_door_liner() {
     }
 }
 
-cat_door_liner();
+// Keeps only the x <= split_x (or x >= split_x) portion of the liner, for
+// printing as two separate pieces that join at the middle of the bottom rail.
+module cat_door_liner_part(part) {
+    if (part == "left")
+        intersection() {
+            cat_door_liner();
+            translate([-big, -big, -big]) cube([big + split_x, 2 * big, 2 * big]);
+        }
+    else if (part == "right")
+        intersection() {
+            cat_door_liner();
+            translate([split_x, -big, -big]) cube([big + (box_width - split_x), 2 * big, 2 * big]);
+        }
+    else
+        cat_door_liner();
+}
+
+// All dimensions above are in inches; STL files carry no unit, and slicers
+// (Elegoo/Cura/PrusaSlicer/etc.) assume mm, so scale the output to mm here
+// to keep the real-world size correct on import.
+module render_liner(part = "whole") {
+    mm_per_inch = 25.4;
+    scale([mm_per_inch, mm_per_inch, mm_per_inch])
+        cat_door_liner_part(part);
+}

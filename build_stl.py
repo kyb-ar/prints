@@ -12,7 +12,11 @@ STL_DIR = ROOT / "stl"
 def main():
     STL_DIR.mkdir(exist_ok=True)
 
-    scad_files = sorted(ROOT.glob("*.scad"))
+    # Files starting with "_" are shared libraries (included by other .scad
+    # files), not standalone parts, so they're skipped here.
+    scad_files = sorted(
+        f for f in ROOT.glob("*.scad") if not f.name.startswith("_")
+    )
     if not scad_files:
         print("No .scad files found.")
         return 1
