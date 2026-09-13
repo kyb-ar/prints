@@ -20,7 +20,7 @@
 // starting with "_").
 
 // ---- Parameters (inches) ----
-door_depth      = 1.5;   // door thickness (liner spans this, Z)
+door_depth      = 1.375; // door thickness (liner spans this, Z)
 box_width       = 10.5;  // width of the cutout in the door (X)
 box_height      = 7.75;  // height of the cutout in the door (Y)
 wall            = 0.25;  // thickness of the liner material (the gap it fills)
