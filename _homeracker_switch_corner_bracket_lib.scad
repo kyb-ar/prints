@@ -77,7 +77,20 @@ lockpin_side  = 4 / mm_per_inch; // hole side length (4mm, matches their
 // bends 90 degrees and runs sideways, so the corner of the L is what
 // actually catches the switch's corner. Flip the part end-for-end, or
 // mirror it in X, to move the L to wherever it needs to be.
-stop_thick   = 5 / mm_per_inch;   // thickness of each arm of the L (5mm)
+// Wall thickness of the arm along Y (the one that blocks sideways
+// movement, off the rail) - this one doesn't need adjusting for fit.
+stop_thick    = 5 / mm_per_inch; // (5mm)
+
+// Wall thickness of the arm along X (the one that actually blocks the
+// switch from sliding along the rail). THIS IS THE ONE TO ADJUST: since
+// the bracket's position on the rail is only ever set by a lock pin, and
+// the rail's pin holes are fixed every 15mm, the bracket can only land
+// on the nearest 15mm mark, not on your switch's exact size - whatever
+// gap is left between this wall and the switch once you've pinned the
+// bracket is play. Pin the bracket, measure that gap with calipers, and
+// add it to this value (then reprint) to close it up.
+stop_wall_thick = 5 / mm_per_inch; // (5mm) + your measured gap
+
 stop_height  = 10 / mm_per_inch;  // how far the L drops below the floor
                      // (10mm) - tune this to your switch's edge
 leg_length_y = 20 / mm_per_inch; // how far the arm along Y (the rail
@@ -143,9 +156,11 @@ module stop_wall() {
         // arm along Y: runs back along the rail's length
         translate([-Wc / 2, sleeve_len - leg_length_y, -stop_height])
             cube([stop_thick, leg_length_y, stop_height]);
-        // arm along X: bends 90 degrees, runs sideways, at the same end
-        translate([-Wc / 2, sleeve_len - stop_thick, -stop_height])
-            cube([leg_length_x, stop_thick, stop_height]);
+        // arm along X: bends 90 degrees, runs sideways, at the same end -
+        // uses stop_wall_thick (see its comment above) rather than
+        // stop_thick, so it can be tuned independently of the other arm
+        translate([-Wc / 2, sleeve_len - stop_wall_thick, -stop_height])
+            cube([leg_length_x, stop_wall_thick, stop_height]);
     }
 }
 
