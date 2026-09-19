@@ -22,6 +22,10 @@
 // rail than the pins need to reach, without moving the pin holes. The
 // grip zone (floor, cavity, hole-side wall) always stays at sleeve_len.
 //
+// The stop side's wall and lip can also be made thicker via extra_width
+// below, growing outward away from the support cavity so the post still
+// fits snugly.
+//
 // The stop only sits against one side wall, so it's handed - flip the
 // part end-for-end, or mirror it in X, to move it to the other side.
 //
@@ -76,6 +80,12 @@ sleeve_len = 2 * base_unit; // how much of the rail's length the channel grips
 // with the grip zone.
 extra_len = 0 / mm_per_inch;
 
+// Extra width added to the stop side (its wall and the lip below it),
+// growing outward, away from the support cavity, so the post still fits
+// snugly - the cavity, hole-side wall, and floor's hole-side edge don't
+// move. Use this to make the stop side's wall and lip both thicker.
+extra_width = 0 / mm_per_inch;
+
 // Lock-pin holes, matching the real HomeRacker part in sample.stl - one
 // per base_unit of length, centered in each unit, same 4mm square size
 // they use, through the hole-side wall only (the stop side has no holes -
@@ -121,8 +131,10 @@ module channel() {
             translate([-Wc / 2, 0, 0]) cube([Wc, sleeve_len, wall]);
             // hole-side rail - grip zone only
             translate([Wc / 2 - wall, 0, 0]) cube([wall, sleeve_len, channel_height]);
-            // stop-side rail - runs the part's full length
-            translate([-Wc / 2, 0, 0]) cube([wall, total_len, channel_height]);
+            // stop-side rail - runs the part's full length, and is
+            // extra_width thicker than the hole-side rail, growing
+            // outward (its inner face, against the cavity, doesn't move)
+            translate([-Wc / 2 - extra_width, 0, 0]) cube([wall + extra_width, total_len, channel_height]);
         }
         // rail cavity, open at the top - grip zone only
         translate([-(post_size + tol) / 2, -eps, wall])
@@ -151,8 +163,8 @@ module lockpin_holes_hole_side() {
 // channel's cavity itself is left untouched - grip zone only, nothing
 // plugged - so the rail still passes all the way through underneath.
 module stop_wall() {
-    translate([-Wc / 2, 0, -stop_height])
-        cube([stop_thick, total_len, stop_height]);
+    translate([-Wc / 2 - extra_width, 0, -stop_height])
+        cube([stop_thick + extra_width, total_len, stop_height]);
 }
 
 module switch_edge_bracket() {
